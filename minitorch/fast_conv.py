@@ -125,6 +125,37 @@ def _tensor_conv1d(
             weight_unrolled.append(l2)
 
 
+    # Step 3
+    input_unrolled_storage = np.array(input_unrolled)
+    input_unrolled_shape = np.zeros((batch, width, in_channels * kw))
+    input_unrolled_strides = np.zeros((1, batch, width))
+
+    weight_unrolled_storage = np.array(weight_unrolled)
+    weight_unrolled_shape = np.zeros((in_channels * kw, out_channels))
+    weight_unrolled_strides = np.zeros((1, in_channels * kw))
+
+
+    weight_unrolled_storage = np.array(weight_unrolled)
+    _tensor_matrix_multiply(
+        out,
+        out_shape,
+        out_strides,
+        out_size,
+        input_unrolled_storage,
+        input_unrolled_shape,
+        input_unrolled_strides,
+        weight_unrolled_storage.
+        )
+    out_size: int,
+    a_storage: Storage,
+    a_shape: Shape,
+    a_strides: Strides,
+    b_storage: Storage,
+    b_shape: Shape,
+    b_strides: Strides,
+)
+
+
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
 
