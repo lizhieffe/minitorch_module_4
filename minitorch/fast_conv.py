@@ -82,6 +82,8 @@ def _tensor_conv1d(
     batch, in_channels, width = input_shape
     out_channels_, in_channels_, kw = weight_shape
 
+    assert width == out_width, f"{width=}, {out_width=}"
+
     assert (
         batch == batch_
         and in_channels == in_channels_
@@ -93,7 +95,8 @@ def _tensor_conv1d(
     # Steps
     # 1. Unroll the input from (B, C, T) to (B, T, C * K)
     # 2. Reshape the weight from (C_OUT, C, K) to (C * K, C_OUT)
-    # 3. Multiply gives (B, T, C_COUT)
+    # 3. Multiply gives (B, T, C_OUT)
+    # 4. Convert to (B, C_OUT, T)
 
     # Step 1
     input_unrolled = []
@@ -124,40 +127,42 @@ def _tensor_conv1d(
                 l2.append(weight[weight_pos])
             weight_unrolled.append(l2)
 
-
     # Step 3
-    input_unrolled_storage = np.array(input_unrolled)
-    input_unrolled_shape = np.zeros((batch, width, in_channels * kw))
-    input_unrolled_strides = np.zeros((1, batch, width))
+    for bi in range(batch):
+        for ti in range(width):
+            for coi in range(out_channels):
+                res = 0.0
+                for i in range(in_channels * kw):
+                    res += input_unrolled[bi][ti][i] * weight_unrolled[i][coi]
+                out_idx = np.array([bi, coi, ti])
+                out_pos = index_to_position(out_idx, out_strides)
+                out[out_pos] = res
 
-    weight_unrolled_storage = np.array(weight_unrolled)
-    weight_unrolled_shape = np.zeros((in_channels * kw, out_channels))
-    weight_unrolled_strides = np.zeros((1, in_channels * kw))
+    # input_unrolled_storage = np.array(input_unrolled)
+    # input_unrolled_shape = np.zeros((batch, width, in_channels * kw))
+    # input_unrolled_strides = np.zeros((1, batch, width))
 
+    # weight_unrolled_storage = np.array(weight_unrolled)
+    # weight_unrolled_shape = np.zeros((in_channels * kw, out_channels))
+    # weight_unrolled_strides = np.zeros((1, in_channels * kw))
 
-    weight_unrolled_storage = np.array(weight_unrolled)
-    _tensor_matrix_multiply(
-        out,
-        out_shape,
-        out_strides,
-        out_size,
-        input_unrolled_storage,
-        input_unrolled_shape,
-        input_unrolled_strides,
-        weight_unrolled_storage.
-        )
-    out_size: int,
-    a_storage: Storage,
-    a_shape: Shape,
-    a_strides: Strides,
-    b_storage: Storage,
-    b_shape: Shape,
-    b_strides: Strides,
-)
+    # weight_unrolled_storage = np.array(weight_unrolled)
+    # _tensor_matrix_multiply(
+    #     out,
+    #     out_shape,
+    #     out_strides,
+    #     out_size,
+    #     input_unrolled_storage,
+    #     input_unrolled_shape,
+    #     input_unrolled_strides,
+    #     weight_unrolled_storage,
+    #     weight_unrolled_shape,
+    #     weight_unrolled_strides)
 
 
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
+tensor_conv1d = _tensor_conv1d
 
 
 class Conv1dFun(Function):
