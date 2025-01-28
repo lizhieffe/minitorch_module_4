@@ -350,7 +350,6 @@ class Tensor:
                 [0] * int(operators.prod(self.shape)), self.shape, backend=self.backend
             )
         self.grad += x
-        # print(f"===lizhi tensor accumulate_derivate for {self.unique_id=} {self.is_leaf()=} {self.is_constant()=} {self._tensor._storage=}")
 
     def is_leaf(self) -> bool:
         "True if this variable created by the user (no `last_fn`)"

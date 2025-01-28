@@ -282,7 +282,6 @@ def tensor_map(fn: Callable[[float], float]) -> Any:
         in_strides: Strides,
     ) -> None:
         assert len(out.shape) == 1, f"{out.shape=}"
-        # print(f"===lizhi bbb {out.shape=}")
         # # TODO: assuming during broadcast, the underlying storage doesn't
         # # change. So the in and out storages are still one to one mapping.
         # assert len(in_storage) == len(out), f"{len(in_storage)=}, {len(out)=}"

@@ -397,7 +397,6 @@ def grad_check(f: Any, *vals: Tensor) -> None:
         x.requires_grad_(True)
         x.zero_grad_()
     random.seed(10)
-    # print(f"===lizhi tensor_functions grad_check {vars[0]._storage=}")
     out = f(*vals)
     out.sum().backward()
     err_msg = """

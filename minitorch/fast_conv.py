@@ -75,14 +75,12 @@ def _tensor_conv1d(
         weight (Storage): storage for `input` tensor.
         weight_shape (Shape): shape for `input` tensor.
         weight_strides (Strides): strides for `input` tensor.
-        reverse (bool): anchor weight at left or right
+        reverse (bool): anchor weight at left or right. lizhi@: anchor means the convolution starts from the left or the right most.
 
     """
     batch_, out_channels, out_width = out_shape
     batch, in_channels, width = input_shape
     out_channels_, in_channels_, kw = weight_shape
-
-    assert width == out_width, f"{width=}, {out_width=}"
 
     assert (
         batch == batch_
@@ -92,77 +90,49 @@ def _tensor_conv1d(
     s1 = input_strides
     s2 = weight_strides
 
-    # Steps
+    # lizhi: Logical Steps
     # 1. Unroll the input from (B, C, T) to (B, T, C * K)
     # 2. Reshape the weight from (C_OUT, C, K) to (C * K, C_OUT)
     # 3. Multiply gives (B, T, C_OUT)
     # 4. Convert to (B, C_OUT, T)
 
-    # Step 1
-    input_unrolled = []
-    for bi in range(batch):
-        l2 = []
-        for ti in range(out_width):
-            l3 = []
-            for ci in range(in_channels):
-                for ki in range(kw):
-                    if ti + ki < width:
-                        input_idx = np.array([bi, ci, ti+ki])
-                        input_pos = index_to_position(input_idx, input_strides)
-                        l3.append(input[input_pos])
-                    else:
-                        l3.append(0.0)
-            l2.append(l3)
-        input_unrolled.append(l2)
-    # input_unrolled = Tensor.make(input_unrolled, (batch, width, in_channels * kw))
+    for i in prange(out_size):
+        out_idx = np.empty_like(out_shape, dtype=np.int32)
+        to_index(i, out_shape, out_idx)
 
-    # Step 2
-    weight_unrolled = []
-    for ci in range(in_channels):
-        for ki in range(kw):
-            l2 = []
-            for coi in range(out_channels):
-                weight_idx = np.array([coi, ci, ki])
+        bi, coi, ti = out_idx
+
+        total = 0.0
+        for ci in range(in_channels):
+            for ki in range(kw):
+                if reverse:
+                    ki = kw - ki - 1
+                weight_idx = np.array((coi, ci, ki))
                 weight_pos = index_to_position(weight_idx, weight_strides)
-                l2.append(weight[weight_pos])
-            weight_unrolled.append(l2)
+                weight_val = weight[weight_pos]
 
-    # Step 3
-    for bi in range(batch):
-        for ti in range(width):
-            for coi in range(out_channels):
-                res = 0.0
-                for i in range(in_channels * kw):
-                    res += input_unrolled[bi][ti][i] * weight_unrolled[i][coi]
-                out_idx = np.array([bi, coi, ti])
-                out_pos = index_to_position(out_idx, out_strides)
-                out[out_pos] = res
+                if reverse:
+                    if ti - ki < 0:
+                        input_val = 0.0
+                    else:
+                        input_idx = np.array([bi, ci, ti - ki])
+                        input_pos = index_to_position(input_idx, input_strides)
+                        input_val = input[input_pos]
+                else:
+                    if ti + ki >= width:
+                        input_val = 0.0
+                    else:
+                        input_idx = np.array([bi, ci, ti + ki])
+                        input_pos = index_to_position(input_idx, input_strides)
+                        input_val = input[input_pos]
 
-    # input_unrolled_storage = np.array(input_unrolled)
-    # input_unrolled_shape = np.zeros((batch, width, in_channels * kw))
-    # input_unrolled_strides = np.zeros((1, batch, width))
+                total += input_val * weight_val
 
-    # weight_unrolled_storage = np.array(weight_unrolled)
-    # weight_unrolled_shape = np.zeros((in_channels * kw, out_channels))
-    # weight_unrolled_strides = np.zeros((1, in_channels * kw))
-
-    # weight_unrolled_storage = np.array(weight_unrolled)
-    # _tensor_matrix_multiply(
-    #     out,
-    #     out_shape,
-    #     out_strides,
-    #     out_size,
-    #     input_unrolled_storage,
-    #     input_unrolled_shape,
-    #     input_unrolled_strides,
-    #     weight_unrolled_storage,
-    #     weight_unrolled_shape,
-    #     weight_unrolled_strides)
-
+        out_pos = index_to_position(out_idx, out_strides)
+        out[out_pos] = total
 
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
-tensor_conv1d = _tensor_conv1d
 
 
 class Conv1dFun(Function):
