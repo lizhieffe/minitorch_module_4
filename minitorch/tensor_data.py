@@ -4,7 +4,6 @@ import random
 from typing import Iterable, Optional, Sequence, Tuple, Union
 
 import numba
-import numba.cuda
 import numpy as np
 import numpy.typing as npt
 from numpy import array, float64
@@ -16,8 +15,7 @@ MAX_DIMS = 32
 
 
 class IndexingError(RuntimeError):
-    """Exception raised for indexing errors."""
-
+    "Exception raised for indexing errors."
     pass
 
 
@@ -33,7 +31,8 @@ UserStrides: TypeAlias = Sequence[int]
 
 
 def index_to_position(index: Index, strides: Strides) -> int:
-    """Converts a multidimensional tensor `index` into a single-dimensional position in
+    """
+    Converts a multidimensional tensor `index` into a single-dimensional position in
     storage based on strides.
 
     Args:
@@ -42,13 +41,18 @@ def index_to_position(index: Index, strides: Strides) -> int:
 
     Returns:
         Position in storage
-
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    ret = 0
+    for i in range(index.shape[0]):
+        delta = int(index[i]) * int(strides[i])
+        ret += delta
+        # print(f"===lizhi tensor_data index_to_position {i=} {int(index[i])=} {int(strides[i])=} {delta=} {ret=}")
+    return ret
 
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
-    """Convert an `ordinal` to an index in the `shape`.
+    """
+    Convert an `ordinal` to an index in the `shape`.
     Should ensure that enumerating position 0 ... size of a
     tensor produces every index exactly once. It
     may not be the inverse of `index_to_position`.
@@ -59,13 +63,24 @@ def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
         out_index : return index corresponding to position.
 
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
-
+    dim = len(shape)
+    
+    size = 1
+    for s in shape:
+      size *= s
+    
+    residule = ordinal
+    denominator = size
+    for i in range(dim):
+      denominator = denominator / shape[i]
+      out_index[i] = residule // denominator
+      residule = residule % denominator
 
 def broadcast_index(
     big_index: Index, big_shape: Shape, shape: Shape, out_index: OutIndex
 ) -> None:
-    """Convert a `big_index` into `big_shape` to a smaller `out_index`
+    """
+    Convert a `big_index` into `big_shape` to a smaller `out_index`
     into `shape` following broadcasting rules. In this case
     it may be larger or with more dimensions than the `shape`
     given. Additional dimensions may need to be mapped to 0 or
@@ -79,13 +94,51 @@ def broadcast_index(
 
     Returns:
         None
-
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    big_dim = len(big_shape)
+    dim = len(shape)
 
+    for i in range(dim):
+      big_s = big_shape[big_dim-dim+i]
+      s = shape[i]
+      if big_s == s:
+        out_index[i] = big_index[big_dim-dim+i]
+      else:
+        out_index[i] = 0
+    return
+
+
+def left_pad_to_dim(shape: UserShape, dim: int) -> UserShape:
+    """Left pad to the shape to the given dimension.
+
+    It does left pad because: When operating on two arrays, NumPy compares their
+    shapes element-wise. It starts with the trailing (i.e. rightmost) dimension
+    and works its way left.
+
+    https://numpy.org/doc/stable/user/basics.broadcasting.html#general-broadcasting-rules
+
+    Args:
+      shape: the input shape to pad.
+      dim: the target dimension.
+
+    Returns:
+      The padded shape. If the input shape already matches the dimension, it is no-op.
+    """
+    if len(shape) > dim:
+      raise ValueError("The shape to pad should not greater than the dim.")
+    if len(shape) == dim:
+      return shape
+
+    ret = []
+    for i in range(dim - len(shape)):
+      ret.append(1)
+    for it in shape:
+      ret.append(it)
+    return ret
 
 def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
-    """Broadcast two shapes to create a new union shape.
+    """
+    Broadcast two shapes to create a new union shape.
 
     Args:
         shape1 : first shape
@@ -96,13 +149,22 @@ def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
 
     Raises:
         IndexingError : if cannot broadcast
-
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    dim = max(len(shape1), len(shape2))
+    if len(shape1) < dim:
+      shape1 = left_pad_to_dim(shape1, dim)
+    if len(shape2) < dim:
+      shape2 = left_pad_to_dim(shape2, dim)
+    
+    ret = []
+    for s1, s2 in zip(shape1, shape2):
+      if s1 != 1 and s2 != 1 and s1 != s2:
+        raise IndexingError("Cannot broadcast.")
+      ret.append(max(s1, s2))
+    return tuple(ret)
 
 
 def strides_from_shape(shape: UserShape) -> UserStrides:
-    """Return a contiguous stride for a shape"""
     layout = [1]
     offset = 1
     for s in reversed(shape):
@@ -143,19 +205,18 @@ class TensorData:
         self.dims = len(strides)
         self.size = int(prod(shape))
         self.shape = shape
-        assert len(self._storage) == self.size
+        assert len(self._storage) == self.size, f"{len(self._storage)=}, {self.size}="
 
     def to_cuda_(self) -> None:  # pragma: no cover
-        """Convert to cuda"""
         if not numba.cuda.is_cuda_array(self._storage):
             self._storage = numba.cuda.to_device(self._storage)
 
     def is_contiguous(self) -> bool:
-        """Check that the layout is contiguous, i.e. outer dimensions have bigger strides than inner dimensions.
+        """
+        Check that the layout is contiguous, i.e. outer dimensions have bigger strides than inner dimensions.
 
         Returns:
             bool : True if contiguous
-
         """
         last = 1e9
         for stride in self._strides:
@@ -171,13 +232,8 @@ class TensorData:
     def index(self, index: Union[int, UserIndex]) -> int:
         if isinstance(index, int):
             aindex: Index = array([index])
-        else:  # if isinstance(index, tuple):
+        if isinstance(index, tuple):
             aindex = array(index)
-
-        # Pretend 0-dim shape is 1-dim shape of singleton
-        shape = self.shape
-        if len(shape) == 0 and len(aindex) != 0:
-            shape = (1,)
 
         # Check for errors
         if aindex.shape[0] != len(self.shape):
@@ -199,7 +255,6 @@ class TensorData:
             yield tuple(out_index)
 
     def sample(self) -> UserIndex:
-        """Get a random valid index"""
         return tuple((random.randint(0, s - 1) for s in self.shape))
 
     def get(self, key: UserIndex) -> float:
@@ -210,27 +265,33 @@ class TensorData:
         self._storage[self.index(key)] = val
 
     def tuple(self) -> Tuple[Storage, Shape, Strides]:
-        """Return core tensor data as a tuple."""
         return (self._storage, self._shape, self._strides)
 
     def permute(self, *order: int) -> TensorData:
-        """Permute the dimensions of the tensor.
+        """
+        Permute the dimensions of the tensor.
 
         Args:
-            *order: a permutation of the dimensions
+            order (list): a permutation of the dimensions
 
         Returns:
             New `TensorData` with the same storage and a new dimension order.
-
         """
         assert list(sorted(order)) == list(
             range(len(self.shape))
         ), f"Must give a position to each dimension. Shape: {self.shape} Order: {order}"
 
-        raise NotImplementedError("Need to include this file from past assignment.")
+        new_shape = tuple(self.shape[x] for x in order)
+        new_strides = tuple(self.strides[x] for x in order)
+
+        ret = TensorData(
+            self._storage,
+            new_shape,
+            new_strides,
+        )
+        return ret
 
     def to_string(self) -> str:
-        """Convert to string"""
         s = ""
         for index in self.indices():
             l = ""
@@ -241,6 +302,7 @@ class TensorData:
                     break
             s += l
             v = self.get(index)
+            # print(f"===lizhi {index=} {v=}")
             s += f"{v:3.2f}"
             l = ""
             for i in range(len(index) - 1, -1, -1):

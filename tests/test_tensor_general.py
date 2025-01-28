@@ -60,8 +60,10 @@ def test_one_args(
     backend: str,
     data: DataObject,
 ) -> None:
+    print("========================================================")
     """Run forward for all one arg functions above."""
     t1 = data.draw(tensors(backend=shared[backend]))
+      
     name, base_fn, tensor_fn = fn
     t2 = tensor_fn(t1)
     for ind in t2._tensor.indices():
@@ -228,6 +230,8 @@ if numba.cuda.is_available():
         x = minitorch.tensor(x1, backend=shared["cuda"])
         y = minitorch.tensor(y1, backend=shared["cuda"])
         z2 = x @ y
+
+        print(f"===lizhi {x=} {y=} {z2=}")
 
         for i in range(2):
             for j in range(2):

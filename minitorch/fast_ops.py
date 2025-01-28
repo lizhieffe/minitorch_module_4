@@ -113,6 +113,7 @@ class FastOps(TensorOps):
 
         """
         # Make these always be a 3 dimensional multiply
+        # The input matrix are either 2 or 3 dims. If 3, it is for the batch dim. If it is 2, it is extended to 3.
         both_2d = 0
         if len(a.shape) == 2:
             a = a.contiguous().view(1, a.shape[0], a.shape[1])
@@ -168,7 +169,29 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # TODO(lizhi): This commented out code doesn't work for some reason. Figure it out!!
+        #
+        # # When `out` and `in` are stride-aligned, avoid indexing
+        # if np.array_equal(in_strides, out_strides) and np.array_equal(in_shape, out_shape):
+        #     for out_pos in range(out.shape[0]):
+        #         out[out_pos] = fn(in_storage[out_pos])
+        #     return
+
+
+        # Not stride-aligned.
+        for out_pos in prange(out.shape[0]):
+            out_idx = np.zeros(out_shape.shape, dtype=np.int64)
+            in_idx = np.zeros(in_shape.shape, dtype=np.int64)
+
+            # out_pos -> out_idx
+            to_index(out_pos, out_shape, out_idx)
+            # out_idx -> in_idx
+            broadcast_index(out_idx, out_shape, in_shape, in_idx)
+            # in_idx -> in_pos
+            in_pos = index_to_position(in_idx, in_strides)
+
+            real_out_pos = index_to_position(out_idx, out_strides)
+            out[real_out_pos] = fn(in_storage[in_pos])
 
     return njit(_map, parallel=True)  # type: ignore
 
@@ -207,7 +230,37 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # When `out`, `a_storage`, `b_storage` are stride-aligned, avoid indexing
+        if np.array_equal(a_strides, b_strides) and np.array_equal(out_strides, a_strides) and np.array_equal(a_shape, b_shape) and np.array_equal(a_shape, out_shape):
+            for i in prange(out.shape[0]):
+                out[i] = fn(a_storage[i], b_storage[i])
+            return
+
+        # When not stride-aligned.
+        for out_pos in prange(out.shape[0]):
+        # for out_pos in range(out.shape[0]):
+            # Note: dtype cannot use python int type which is incompatible with numba.
+            out_idx = np.zeros(out_shape.shape, dtype=np.int64)
+            # out_pos -> out_idx
+            to_index(out_pos, out_shape, out_idx)
+
+            a_idx = np.zeros(a_shape.shape, dtype=np.int64)
+            # out_idx -> a_idx
+            broadcast_index(out_idx, out_shape, a_shape, a_idx)
+            # a_idx -> a_pos
+            a_pos = index_to_position(a_idx, a_strides)
+            a_val = a_storage[a_pos]
+
+            b_idx = np.zeros(b_shape.shape, dtype=np.int64)
+            # out_idx -> b_idx
+            broadcast_index(out_idx, out_shape, b_shape, b_idx)
+            # b_idx -> b_pos
+            b_pos = index_to_position(b_idx, b_strides)
+            b_val = b_storage[b_pos]
+
+            out[out_pos] = fn(a_val, b_val)
+
+    # return _zip
 
     return njit(_zip, parallel=True)  # type: ignore
 
@@ -242,7 +295,24 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        for i in prange(out.shape[0]):
+            # Generate out_index
+            out_index = np.zeros(out_shape.shape)
+            to_index(i, out_shape, out_index)
+
+            reduced = 0.0
+            for j in range(a_shape[reduce_dim]):
+                a_index = out_index
+                a_index[reduce_dim] = j
+                a_pos = index_to_position(a_index, a_strides)
+                a_val = a_storage[a_pos]
+
+                if j == 0:
+                    reduced = a_val
+                else:
+                    reduced = fn(reduced, a_val)
+
+            out[i] = reduced
 
     return njit(_reduce, parallel=True)  # type: ignore
 
@@ -259,6 +329,8 @@ def _tensor_matrix_multiply(
     b_strides: Strides,
 ) -> None:
     """NUMBA tensor matrix multiply function.
+
+    The dim of a, b, out are all 3. See the matrix_multiply() fn in this file for details.
 
     Should work for any tensor shapes that broadcast as long as
 
@@ -290,10 +362,44 @@ def _tensor_matrix_multiply(
         None : Fills in `out`
 
     """
+    assert a_shape[-1] == b_shape[-2]
+    assert a_shape.shape[0] == 3
+    assert len(a_shape.shape) == len(b_shape.shape)
     a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
     b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
 
-    raise NotImplementedError("Need to include this file from past assignment.")
+    for i in prange(out.shape[0]):
+        out_idx = np.zeros(out_shape.shape)
+        to_index(i, out_shape, out_idx)
+
+        inner_sum = 0
+        for j in range(a_shape[-1]):
+            # Get a_value
+            a_big_idx = out_idx.copy()
+            a_big_idx[2] = j
+            # There might be broadcast on the dim 0 (e.g. 1 element extended to N elements). So cast the a_idx back to a's original shape.
+            a_big_shape = a_shape.copy()
+            a_big_shape[0] = out_shape[0]
+            a_idx = np.zeros(a_shape.shape)
+            broadcast_index(a_big_idx, a_big_shape, a_shape, a_idx)
+            a_pos = index_to_position(a_idx, a_strides)
+            a_val = a_storage[a_pos]
+
+            # Get b_value
+            b_big_idx = out_idx.copy()
+            b_big_idx[1] = j
+            # There might be broadcast on the dim 0 (e.g. 1 element extended to N elements). So cast the b_idx back to b's original shape.
+            b_big_shape = b_shape.copy()
+            b_big_shape[0] = out_shape[0]
+            b_idx = np.zeros(b_shape.shape)
+            broadcast_index(b_big_idx, b_big_shape, b_shape, b_idx)
+            b_pos = index_to_position(b_idx, b_strides)
+            b_val = b_storage[b_pos]
+
+            
+            inner_sum += (a_val * b_val)
+
+        out[i] = inner_sum
 
 
 tensor_matrix_multiply = njit(_tensor_matrix_multiply, parallel=True)
