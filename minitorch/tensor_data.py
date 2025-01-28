@@ -46,7 +46,6 @@ def index_to_position(index: Index, strides: Strides) -> int:
     for i in range(index.shape[0]):
         delta = int(index[i]) * int(strides[i])
         ret += delta
-        # print(f"===lizhi tensor_data index_to_position {i=} {int(index[i])=} {int(strides[i])=} {delta=} {ret=}")
     return ret
 
 

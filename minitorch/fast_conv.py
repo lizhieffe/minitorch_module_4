@@ -90,8 +90,40 @@ def _tensor_conv1d(
     s1 = input_strides
     s2 = weight_strides
 
-    # TODO: Implement for Task 4.1.
-    raise NotImplementedError("Need to implement for Task 4.1")
+    # Steps
+    # 1. Unroll the input from (B, C, T) to (B, T, C * K)
+    # 2. Reshape the weight from (C_OUT, C, K) to (C * K, C_OUT)
+    # 3. Multiply gives (B, T, C_COUT)
+
+    # Step 1
+    input_unrolled = []
+    for bi in range(batch):
+        l2 = []
+        for ti in range(out_width):
+            l3 = []
+            for ci in range(in_channels):
+                for ki in range(kw):
+                    if ti + ki < width:
+                        input_idx = np.array([bi, ci, ti+ki])
+                        input_pos = index_to_position(input_idx, input_strides)
+                        l3.append(input[input_pos])
+                    else:
+                        l3.append(0.0)
+            l2.append(l3)
+        input_unrolled.append(l2)
+    # input_unrolled = Tensor.make(input_unrolled, (batch, width, in_channels * kw))
+
+    # Step 2
+    weight_unrolled = []
+    for ci in range(in_channels):
+        for ki in range(kw):
+            l2 = []
+            for coi in range(out_channels):
+                weight_idx = np.array([coi, ci, ki])
+                weight_pos = index_to_position(weight_idx, weight_strides)
+                l2.append(weight[weight_pos])
+            weight_unrolled.append(l2)
+
 
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
