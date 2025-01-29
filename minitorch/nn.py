@@ -100,12 +100,53 @@ class AvgPool2d(Function):
 
             out_pos = index_to_position(out_idx, out_strides)
             out_storage[out_pos] = grad_val / kernel[0] / kernel[1]
+            # out_storage[out_pos] = 0.0
 
-        return out
+        # TODO: is this assumption true?
+        # Since the 2D kernel size is a constant, it is ok to just give it 0 gradient.
+        out2 = t1.zeros((2,))
+        return out, out2
 
+def tile_impl_2(input: Tensor, kernel: Tuple[int, int]) -> Tuple[Tensor, int, int]:
+    """Reshape an image tensor for 2D pooling with an average operation.
+
+    Args:
+    ----
+        input: batch x channel x height x width
+        kernel: height x width of pooling
+
+    Returns:
+    -------
+        Tensor of size batch x channel x new_height x new_width x (kernel_height * kernel_width) as well as the new_height and new_width value.
+
+    """
+    # input - [B, C, H, W]
+    b, c, h, w = input.shape
+    kh, kw = kernel
+
+    new_h = h // kh
+    new_w = w // kw
+
+    y = input.contiguous().view(b, c, h, new_w, kw)     # [B, C, H, NEW_W, KW]
+    y = y.permute(0, 1, 3, 4, 2)                        # [B, C, NEW_W, KW, H]
+    y = y.contiguous().view(b, c, new_w, kw, new_h, kh) # [B, C, NEW_W, KW, NEW_H, KH]
+    y = y.permute(0, 1, 4, 2, 5, 3)                     # [B, C, NEW_H, NEW_W, KH, KW]
+    y = y.contiguous().view(b, c, new_h, new_w, kh * kw)  # [B, C, NEW_H, NEW_W, KH * KW]
+
+    return y, (new_h, new_w)
+
+USE_IMPL_1 = False
 
 def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
-    kernel_tensor = input.make(kernel, (2,), backend=input.backend)
-    return AvgPool2d.apply(input, kernel_tensor)
+    print(f"===lizhi raw inputs {input=} {kernel=}")
+    if USE_IMPL_1:
+      kernel_tensor = input.make(kernel, (2,), backend=input.backend)
+      return AvgPool2d.apply(input, kernel_tensor)
+    else:
+      batch, channels, _, _ = input.shape
+      tiled, (new_h, new_w) = tile_impl_2(input, kernel)
+      output = tiled.mean(4).contiguous().view(batch, channels, new_h, new_w)
+      return output
+
 
 # TODO: Implement for Task 4.3.
