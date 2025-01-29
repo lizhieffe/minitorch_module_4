@@ -9,6 +9,7 @@ from .autodiff import Context
 from .fast_ops import FastOps
 from .tensor import Tensor
 from .tensor_functions import Function, rand, tensor
+from .tensor_ops import SimpleOps
 
 
 # List of functions in this file:
@@ -135,10 +136,10 @@ def tile_impl_2(input: Tensor, kernel: Tuple[int, int]) -> Tuple[Tensor, int, in
 
     return y, (new_h, new_w)
 
+# The IMPL_2 is better.
 USE_IMPL_1 = False
 
 def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
-    print(f"===lizhi raw inputs {input=} {kernel=}")
     if USE_IMPL_1:
       kernel_tensor = input.make(kernel, (2,), backend=input.backend)
       return AvgPool2d.apply(input, kernel_tensor)
@@ -147,6 +148,31 @@ def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
       tiled, (new_h, new_w) = tile_impl_2(input, kernel)
       output = tiled.mean(4).contiguous().view(batch, channels, new_h, new_w)
       return output
+
+max_reduce_fn = SimpleOps.reduce(operators.max)
+
+def argmax(a: Tensor, dim: int) -> Tensor:
+    max_a = max_reduce_fn(a, dim)
+    return max_a == a
+
+class Max(Function):
+    # TODO: change to FastOps
+    @staticmethod
+    def forward(ctx: Context, a: Tensor, dim: Tensor) -> Tensor:
+        ctx.save_for_backward(a, int(dim.item()))
+        return max_reduce_fn(a, int(dim.item()))
+
+    @staticmethod
+    def backward(ctx: Context, grad_output: Tensor) -> Tensor:
+        (a, dim) = ctx.saved_tensors
+        max_a = argmax(a, dim)
+        return max_a * grad_output, a.zeros((1,))
+
+def max(t: Tensor, dim: int | None = None) -> Tensor:
+    if dim is not None:
+        return Max.apply(t, t._ensure_tensor(dim))
+    else:
+        return Max.apply(t.contiguous().view(len(t.tuple()[0])), t._ensure_tensor(dim))
 
 
 # TODO: Implement for Task 4.3.
