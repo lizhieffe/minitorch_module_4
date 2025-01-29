@@ -257,8 +257,49 @@ def _tensor_conv2d(
     s10, s11, s12, s13 = s1[0], s1[1], s1[2], s1[3]
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
 
-    # TODO: Implement for Task 4.2.
-    raise NotImplementedError("Need to implement for Task 4.2")
+    # lizhi: Logical Steps
+    # 1. Unroll the input from (B, C_IN, H, W) to (B, H, W, C_IN * KH * KW)
+    # 2. Reshape the weight from (C_OUT, C_IN, KH, KW) to (C_IN * KH * KW, C_OUT)
+    # 3. Multiply gives (B, H, W, C_OUT)
+    # 4. Convert to (B, C_OUT, H, W)
+
+    for i in prange(out_size):
+        out_idx = np.empty_like(out_shape)
+        to_index(i, out_shape, out_idx)
+
+        b_i, c_out_i, h_i, w_i = out_idx
+
+        total = 0.0
+        for c_in_i in range(in_channels):
+            for kh_i in range(kh):
+                for kw_i in range(kw):
+                    if reverse:
+                        kh_i = kh - kh_i - 1
+                        kw_i = kw - kw_i - 1
+
+                    weight_idx = np.array((c_out_i, c_in_i, kh_i, kw_i))
+                    weight_pos = index_to_position(weight_idx, weight_strides)
+                    weight_val = weight[weight_pos]
+
+                    dot_prod_h_i = h_i + kh_i if not reverse else h_i - kh_i
+                    dot_prod_w_i = w_i + kw_i if not reverse else w_i - kw_i
+
+                    if reverse:
+                        if dot_prod_h_i < 0 or dot_prod_w_i < 0:
+                            continue
+                    else:
+                        if dot_prod_h_i >= input_shape[2] or dot_prod_w_i >= input_shape[3]:
+                            continue
+                    
+                    input_idx = np.array((b_i, c_in_i, dot_prod_h_i, dot_prod_w_i))
+                    input_pos = index_to_position(input_idx, input_strides)
+                    input_val = input[input_pos]
+
+                    total += input_val * weight_val
+
+        out_pos = index_to_position(out_idx, out_strides)
+        out[out_pos] = total
+
 
 
 tensor_conv2d = njit(_tensor_conv2d, parallel=True, fastmath=True)
