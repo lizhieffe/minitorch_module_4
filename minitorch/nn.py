@@ -189,7 +189,6 @@ def zerofy(x: float, pct: float):
     else:
         return x
       
-# TODO: make it work in FastOps?
 def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
     """Dropout
     
@@ -203,12 +202,6 @@ def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
     """
     if ignore or pct == 0.0000:
         return a
-    
-
-    # dropout_mask = a.ones(a.shape)
-    # dropout_map_fn = SimpleOps.map(functools.partial(zerofy, pct=pct)) 
-    # dropout_mask = dropout_map_fn(dropout_mask)
-    # return a * dropout_mask
 
     dropout_mask = rand(a.shape, a.backend)
     dropout_mask = (dropout_mask < (1 - pct))
