@@ -203,10 +203,15 @@ def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
     """
     if ignore or pct == 0.0000:
         return a
+    
 
-    dropout_mask = a.ones(a.shape)
-    dropout_map_fn = SimpleOps.map(functools.partial(zerofy, pct=pct)) 
-    dropout_mask = dropout_map_fn(dropout_mask)
+    # dropout_mask = a.ones(a.shape)
+    # dropout_map_fn = SimpleOps.map(functools.partial(zerofy, pct=pct)) 
+    # dropout_mask = dropout_map_fn(dropout_mask)
+    # return a * dropout_mask
+
+    dropout_mask = rand(a.shape, a.backend)
+    dropout_mask = (dropout_mask < (1 - pct))
     return a * dropout_mask
 
 def softmax(t: Tensor, dim: int) -> Tensor:
@@ -220,7 +225,7 @@ def logsoftmax(t: Tensor, dim: int) -> Tensor:
     
     - See the trick: https://en.wikipedia.org/wiki/LogSumExp#log-sum-exp_trick_for_log-domain_calculations
     """
-    
+
     t_exp = t.exp()
     t_exp_sum = t_exp.sum(dim)
 
