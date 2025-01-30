@@ -209,3 +209,7 @@ def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
     dropout_mask = dropout_map_fn(dropout_mask)
     return a * dropout_mask
 
+def softmax(t: Tensor, dim: int) -> Tensor:
+    t_exp_sum = SimpleOps.reduce(operators.exp)(t, dim)
+    t_exp = t.exp()
+    return t_exp / t_exp_sum
