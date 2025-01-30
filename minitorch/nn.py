@@ -1,3 +1,4 @@
+from re import X
 from typing import Tuple
 from minitorch.tensor_data import index_to_position, to_index
 
@@ -87,7 +88,6 @@ class AvgPool2d(Function):
         out = t1.zeros(t1.shape)
         out_storage, out_shape, out_strides = out.tuple()
         
-        print(f"===lizhi {grad_output=}")
         for i in range(out_storage.shape[0]):
             out_idx = np.empty_like(out_shape)
             to_index(i, out_shape, out_idx)
@@ -149,14 +149,13 @@ def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
       output = tiled.mean(4).contiguous().view(batch, channels, new_h, new_w)
       return output
 
-max_reduce_fn = SimpleOps.reduce(operators.max)
+max_reduce_fn = FastOps.reduce(operators.max)
 
 def argmax(a: Tensor, dim: int) -> Tensor:
     max_a = max_reduce_fn(a, dim)
     return max_a == a
 
 class Max(Function):
-    # TODO: change to FastOps
     @staticmethod
     def forward(ctx: Context, a: Tensor, dim: Tensor) -> Tensor:
         ctx.save_for_backward(a, int(dim.item()))
@@ -175,4 +174,38 @@ def max(t: Tensor, dim: int | None = None) -> Tensor:
         return Max.apply(t.contiguous().view(len(t.tuple()[0])), t._ensure_tensor(dim))
 
 
-# TODO: Implement for Task 4.3.
+def maxpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
+    batch, channels, _, _ = input.shape
+    tiled, (new_h, new_w) = tile_impl_2(input, kernel)
+    output = max(tiled, 4).contiguous().view(batch, channels, new_h, new_w)
+    return output
+
+import random
+import functools
+
+def zerofy(x: float, pct: float):
+    if random.random() < pct:
+        return 0.0
+    else:
+        return x
+      
+# TODO: make it work in FastOps?
+def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
+    """Dropout
+    
+    Args:
+        a: the tensor to apply dropout.
+        pct: the pct to dropout.
+        ignore: whether to ignore the dropout. Similar to torch training=False
+    
+    Returns:
+        The dropouted the tensor.
+    """
+    if ignore or pct == 0.0000:
+        return a
+
+    dropout_mask = a.ones(a.shape)
+    dropout_map_fn = SimpleOps.map(functools.partial(zerofy, pct=pct)) 
+    dropout_mask = dropout_map_fn(dropout_mask)
+    return a * dropout_mask
+
