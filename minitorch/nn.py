@@ -210,6 +210,18 @@ def dropout(a: Tensor, pct: float, ignore: bool | None = False) -> Tensor:
     return a * dropout_mask
 
 def softmax(t: Tensor, dim: int) -> Tensor:
-    t_exp_sum = SimpleOps.reduce(operators.exp)(t, dim)
     t_exp = t.exp()
+    t_exp_sum = t_exp.sum(dim)
+
     return t_exp / t_exp_sum
+
+def logsoftmax(t: Tensor, dim: int) -> Tensor:
+    """Compute the log of the softmax as a tensor
+    
+    - See the trick: https://en.wikipedia.org/wiki/LogSumExp#log-sum-exp_trick_for_log-domain_calculations
+    """
+    
+    t_exp = t.exp()
+    t_exp_sum = t_exp.sum(dim)
+
+    return t - t_exp_sum.log()
