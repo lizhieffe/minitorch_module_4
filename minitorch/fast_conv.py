@@ -107,30 +107,30 @@ def _tensor_conv1d(
             for ki in range(kw):
                 if reverse:
                     ki = kw - ki - 1
-                weight_idx = np.array((coi, ci, ki))
-                weight_pos = index_to_position(weight_idx, weight_strides)
-                weight_val = weight[weight_pos]
+
+                # Note: create np.array is very costly. If we use the commented out version, the training job is bout 6x slower.
+
+                # weight_idx = np.array((coi, ci, ki))
+                # weight_pos = index_to_position(weight_idx, weight_strides)
+                # weight_val = weight[weight_pos]
+
+                weight_val = weight[coi * s2[0] + ci * s2[1] + ki * s2[2]]
 
                 if reverse:
                     if ti - ki < 0:
                         input_val = 0.0
                     else:
-                        input_idx = np.array([bi, ci, ti - ki])
-                        input_pos = index_to_position(input_idx, input_strides)
-                        input_val = input[input_pos]
+                        input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti-ki) * input_strides[2]]
                 else:
                     if ti + ki >= width:
                         input_val = 0.0
                     else:
-                        input_idx = np.array([bi, ci, ti + ki])
-                        input_pos = index_to_position(input_idx, input_strides)
-                        input_val = input[input_pos]
+                        input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti+ki) * input_strides[2]]
 
                 total += input_val * weight_val
 
         out_pos = index_to_position(out_idx, out_strides)
         out[out_pos] = total
-
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
 
@@ -277,9 +277,7 @@ def _tensor_conv2d(
                         kh_i = kh - kh_i - 1
                         kw_i = kw - kw_i - 1
 
-                    weight_idx = np.array((c_out_i, c_in_i, kh_i, kw_i))
-                    weight_pos = index_to_position(weight_idx, weight_strides)
-                    weight_val = weight[weight_pos]
+                    weight_val = weight[c_out_i * weight_strides[0] + c_in_i * weight_strides[1] + kh_i * weight_strides[2] + kw_i * weight_strides[3]]
 
                     dot_prod_h_i = h_i + kh_i if not reverse else h_i - kh_i
                     dot_prod_w_i = w_i + kw_i if not reverse else w_i - kw_i
@@ -291,15 +289,13 @@ def _tensor_conv2d(
                         if dot_prod_h_i >= input_shape[2] or dot_prod_w_i >= input_shape[3]:
                             continue
                     
-                    input_idx = np.array((b_i, c_in_i, dot_prod_h_i, dot_prod_w_i))
-                    input_pos = index_to_position(input_idx, input_strides)
+                    input_pos = b_i * input_strides[0] + c_in_i * input_strides[1] + dot_prod_h_i * input_strides[2] + dot_prod_w_i * input_strides[3]
                     input_val = input[input_pos]
 
                     total += input_val * weight_val
 
         out_pos = index_to_position(out_idx, out_strides)
         out[out_pos] = total
-
 
 
 tensor_conv2d = njit(_tensor_conv2d, parallel=True, fastmath=True)
