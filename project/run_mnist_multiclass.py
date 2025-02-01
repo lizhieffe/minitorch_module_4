@@ -37,12 +37,15 @@ class Linear(minitorch.Module):
 class Conv2d(minitorch.Module):
     def __init__(self, in_channels, out_channels, kh, kw):
         super().__init__()
-        self.weights = RParam(out_channels, in_channels, kh, kw)
-        self.bias = RParam(out_channels, 1, 1)
+        self.weights = RParam(out_channels, in_channels, kh, kw) # [OUT_C, IN_C, KH, KW]
+        self.bias = RParam(out_channels, 1, 1) # [OUT_C, 1, 1]
 
     def forward(self, input):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # input [B, IN_C, H, W]
+        y = minitorch.conv2d(input, self.weights.value) # [B, OUT_C, H, W]
+        y = y + self.bias.value # [B, OUT_C, H, W]
+        return y
+        
 
 
 class Network(minitorch.Module):
