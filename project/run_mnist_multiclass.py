@@ -70,21 +70,22 @@ class Network(minitorch.Module):
         self.mid = None
         self.out = None
 
-        self.conv2d_1 = Conv2d(3, 4, 3, 3) # [IN_C, OUT_C, KH, KW]
-        self.conv2d_2 = Conv2d(4, 8, 3, 3) # [IN_C, OUT_C, KH, KW]
+        self.conv2d_1 = Conv2d(1, 4, 3, 3)  # [IN_C, 4, KH, KW]
+        self.conv2d_2 = Conv2d(4, 8, 3, 3)  # [4, 8, KH, KW]
         self.linear_1 = Linear(392, 64)
-        self.linear_2 = Linear(64, 3)
+        self.linear_2 = Linear(64, 10)      # [64, CLASS]
 
     def forward(self, x):
-        batch, h, w, in_channels = x.shape
+        batch, in_channels, h, w  = x.shape # [B, IN_C, H, W]
         assert w == 7 * 4
-        assert h == 7 * 4
-        y = x.permute(0, 3, 1, 2) # [B, IN_C, H, W]
-        y = self.conv2d_1(y)  # [B, 4, H, W]
-        y = y.relu()
-        y = self.conv2d_2(y)  # [B, 8, H, W]
-        y = y.relu()          # [B, 8, H, W]
-        y = minitorch.maxpool2d(y, (4, 4))  # [B, 8, H/4, W/4]
+        assert h == 7 * 4, f"{x.shape=}"
+        y = self.conv2d_1(x)  # [B, 4, H, W]
+        self.mid = y.relu()
+
+        y = self.conv2d_2(self.mid)  # [B, 8, H, W]
+        self.out = y.relu()          # [B, 8, H, W]
+
+        y = minitorch.maxpool2d(self.out, (4, 4))  # [B, 8, H/4, W/4]
         y = y.view(batch, 8 * h//4 * w//4)  # [B, 8 * H/4 * W/4]
         y = self.linear_1(y)    # [B, 64]
         y = y.relu()
