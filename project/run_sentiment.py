@@ -158,6 +158,7 @@ class SentenceSentimentTrain:
             for batch_num, example_num in enumerate(
                 range(0, n_training_samples, batch_size)
             ):
+                optim.zero_grad()
                 y = minitorch.tensor(
                     y_train[example_num : example_num + batch_size], backend=BACKEND
                 )
