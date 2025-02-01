@@ -70,12 +70,28 @@ class Network(minitorch.Module):
         self.mid = None
         self.out = None
 
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.conv2d_1 = Conv2d(3, 4, 3, 3) # [IN_C, OUT_C, KH, KW]
+        self.conv2d_2 = Conv2d(4, 8, 3, 3) # [IN_C, OUT_C, KH, KW]
+        self.linear_1 = Linear(392, 64)
+        self.linear_2 = Linear(64, 3)
 
     def forward(self, x):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        batch, h, w, in_channels = x.shape
+        assert w == 7 * 4
+        assert h == 7 * 4
+        y = x.permute(0, 3, 1, 2) # [B, IN_C, H, W]
+        y = self.conv2d_1(y)  # [B, 4, H, W]
+        y = y.relu()
+        y = self.conv2d_2(y)  # [B, 8, H, W]
+        y = y.relu()          # [B, 8, H, W]
+        y = minitorch.maxpool2d(y, (4, 4))  # [B, 8, H/4, W/4]
+        y = y.view(batch, 8 * h//4 * w//4)  # [B, 8 * H/4 * W/4]
+        y = self.linear_1(y)    # [B, 64]
+        y = y.relu()
+        y = minitorch.dropout(y, 0.25)  # [B, 64]
+        y = self.linear_2(y)            # [B, CLASS]
+        y = minitorch.logsoftmax(y, 1)  # [B, CLASS]
+        return y
 
 
 def make_mnist(start, stop):
