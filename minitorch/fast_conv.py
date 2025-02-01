@@ -103,7 +103,7 @@ def _tensor_conv1d(
         bi, coi, ti = out_idx
 
         total = 0.0
-        for ci in range(in_channels):
+        for ci in prange(in_channels):
             for ki in range(kw):
                 if reverse:
                     ki = kw - ki - 1
