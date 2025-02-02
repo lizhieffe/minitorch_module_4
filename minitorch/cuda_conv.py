@@ -85,6 +85,10 @@ def _tensor_conv1d(
     j = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
     k = cuda.blockIdx.z * cuda.blockDim.z + cuda.threadIdx.z
 
+    pi = cuda.threadIdx.x
+    pj = cuda.threadIdx.y
+    pk = cuda.threadIdx.z
+
     if i >= batch or j >= width:
         return
 
@@ -93,16 +97,25 @@ def _tensor_conv1d(
     input_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM, BLOCK_DIM), numba.float64) # [B, T, KW * C_IN]
     weight_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64) # [KW * C_IN, C_OUT]
 
+    total = 0
     for conv_i in range(0, k_width * in_channels, BLOCK_DIM):
-        k_width_i = conv_i // in_channels
-        in_channels_i = conv_i % in_channels
+        k_width_i = (pk + conv_i) // in_channels
+        in_channels_i = (pk + conv_i) % in_channels
 
-        input_index = (batch, in_channels_i, width + k_width_i)
-        input_shared[i][j][conv_i] = input[input_batch_stride * batch + input_strides[1] * in_channels_i + input_strides[2] * (width + k_width_i)]
-        weight_shared[conv_i][k] = weight[weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i]
+        if pk + conv_i < k_width * in_channels:
+            input_shared[i][j][pk] = input[input_batch_stride * batch + input_strides[1] * in_channels_i + input_strides[2] * (width + k_width_i)]
+            weight_shared[pk][k] = weight[weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i]
 
-        if i < batch and j < width and k < k_width * in_channels:
-            input_shared[i][j]
+        numba.cuda.syncthreads()
+
+        for iii in range(BLOCK_DIM):
+            if pk + conv_i >= k_width * in_channels:
+                break
+            total += input_shared[i][j][iii] * weight_shared[iii][k]
+
+    
+
+        
 
     
 
