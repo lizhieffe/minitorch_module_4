@@ -105,10 +105,10 @@ def _tensor_conv1d(
     # out[3] = 2.34
     # out[6] = 2.34
 
-    # if i >= batch or j >= width or k >= out_channels:
-    #     return
-    if i >= batch or j >= out_channels or k >= width:
+    if i >= batch or j >= width or k >= out_channels:
         return
+    # if i >= batch or j >= out_channels or k >= width:
+    #     return
 
     # out[0] = 1.23
     # out[1] = 2.34
@@ -144,8 +144,8 @@ def _tensor_conv1d(
                 break
             total += input_shared[i][j][iii] * weight_shared[iii][k]
 
-    out_pos = out_strides[0] * i + out_strides[1] * j + out_strides[2] * k
-    print(f"===lizhi {i=} {j=} {k=} {out_strides[0]=} {out_strides[1]=} {out_strides[2]=} {out_pos=}")
+    out_pos = out_strides[0] * i + out_strides[1] * k + out_strides[2] * j
+    print(f"===lizhi {out_shape[1]=} {out_shape[2]=} {i=} {j=} {k=} {out_strides[0]=} {out_strides[1]=} {out_strides[2]=} {out_pos=}")
     out[out_pos] = total
     
     # out[0] = 1.23
