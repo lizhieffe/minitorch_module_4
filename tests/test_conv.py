@@ -16,6 +16,9 @@ def test_conv1d_simple() -> None:
     t = minitorch.tensor([0, 1, 2, 3]).view(1, 1, 4)
     t.requires_grad_(True)
     t2 = minitorch.tensor([[1, 2, 3]]).view(1, 1, 3)
+    print(f"===lizhi {t=} {t2=}")
+    _, t2_shape, t2_strides = t2.tuple()
+    print(f"===lizhi {t2_shape=} {t2_strides=}")
     out = minitorch.Conv1dFun.apply(t, t2)
 
     print(f"===lizhi {out[0,0,0]=}")
