@@ -235,11 +235,11 @@ class View(Function):
         ctx.save_for_backward(a.shape)
         assert a._tensor.is_contiguous(), "Must be contiguous to view"
         shape2 = [int(shape[i]) for i in range(shape.size)]
-        print(f"===lizhi {shape=} {shape2=}")
+        # print(f"===lizhi {shape=} {shape2=}")
         ret = minitorch.Tensor.make(
             a._tensor._storage, tuple(shape2), backend=a.backend
         )
-        print(f"===lizhi {shape=} {shape2=}  {ret.tuple()[1]=} {ret.tuple()[2]=}")
+        # print(f"===lizhi {shape=} {shape2=}  {ret.tuple()[1]=} {ret.tuple()[2]=}")
         return ret
 
     @staticmethod

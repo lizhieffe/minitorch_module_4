@@ -129,20 +129,22 @@ def _tensor_conv1d(
         if pk + conv_i < k_width * in_channels:
             input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
             weight_pos = weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i
-            print(f"===lizhi {k=} {in_channels_i=} {weight_strides.shape=} {weight_strides[0]=} {weight_strides[1]=} {weight_strides[2]=} {weight_pos=}")
+            # print(f"===lizhi {k=} {in_channels_i=} {weight_strides.shape=} {weight_strides[0]=} {weight_strides[1]=} {weight_strides[2]=} {weight_pos=}")
             weight_shared[pk][k] = weight[weight_pos]
             input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * 0 + input_strides[2] * (j + k_width_i)]
             # input_shared[i][j][pk] = 1.2
 
 
-        numba.cuda.syncthreads()
+        # numba.cuda.syncthreads()
 
         for iii in range(BLOCK_DIM):
             if iii + conv_i >= k_width * in_channels:
                 break
             total += input_shared[i][j][iii] * weight_shared[iii][k]
 
-    out[out_strides[0] * i + out_strides[1] * j + out_strides[2] * k] = total
+    out_pos = out_strides[0] * i + out_strides[1] * j + out_strides[2] * k
+    print(f"===lizhi {i=} {j=} {k=} {out_strides[0]=} {out_strides[1]=} {out_strides[2]=} {out_pos=}")
+    out[out_pos] = total
     
     # out[0] = 1.23
     # out[1] = 2.34
