@@ -105,7 +105,9 @@ def _tensor_conv1d(
     # out[3] = 2.34
     # out[6] = 2.34
 
-    if i >= batch or j >= width or k >= out_channels:
+    # if i >= batch or j >= width or k >= out_channels:
+    #     return
+    if i >= batch or j >= out_channels or k >= width:
         return
 
     # out[0] = 1.23
