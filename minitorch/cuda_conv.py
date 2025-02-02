@@ -112,7 +112,7 @@ def _tensor_conv1d(
         numba.cuda.syncthreads()
 
         for iii in range(BLOCK_DIM):
-            if pk + conv_i >= k_width * in_channels:
+            if iii + conv_i >= k_width * in_channels:
                 break
             total += input_shared[i][j][iii] * weight_shared[iii][k]
 
