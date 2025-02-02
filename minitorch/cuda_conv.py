@@ -1,11 +1,12 @@
 # type: ignore
 # Currently pyright doesn't support numba.cuda
 
-from typing import Callable, Optional, TypeVar, Any
+from typing import Callable, Optional, TypeVar, Any, Tuple
 
 import numba
 from numba import cuda
 from numba.cuda import jit as _jit
+from .autodiff import Context
 from .tensor import Tensor
 from .tensor_data import (
     MAX_DIMS,
@@ -116,6 +117,7 @@ def _tensor_conv1d(
 
     out[out_strides[0] * i + out_strides[1] * j + out_strides[2] * k] = total
 
+tensor_conv1d = jit(_tensor_conv1d)
 
 class Conv1dFun(Function):
     @staticmethod
@@ -145,12 +147,12 @@ class Conv1dFun(Function):
 
         # One block per batch, extra rows, extra col
         blockspergrid = (
-            (out.shape[0] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
-            (out.shape[1] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
-            (out.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
+            (output.shape[0] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
+            (output.shape[1] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
+            (output.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
-        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK), 1)
-        _tensor_conv1d[blockspergrid, threadsperblock](
+        threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)
+        tensor_conv1d[blockspergrid, threadsperblock](
             *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
         )
 
@@ -180,8 +182,8 @@ class Conv1dFun(Function):
             (grad_weight.shape[1] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
             (grad_weight.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
-        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK), 1)
-        _tensor_conv1d[blockspergrid, threadsperblock](
+        threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)
+        tensor_conv1d[blockspergrid, threadsperblock](
             *grad_weight.tuple(), grad_weight.size, *new_input.tuple(), *new_grad_output.tuple(), False
         )
 
