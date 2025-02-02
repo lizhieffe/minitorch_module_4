@@ -113,6 +113,8 @@ def _tensor_conv1d(
                 break
             total += input_shared[i][j][iii] * weight_shared[iii][k]
 
+    out[out_strides[0] * i + out_strides[1] * j + out_strides[2] * k] = total
+
     
 
         
