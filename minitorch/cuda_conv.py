@@ -127,10 +127,10 @@ def _tensor_conv1d(
         in_channels_i = (pk + conv_i) % in_channels
 
         if pk + conv_i < k_width * in_channels:
-            input_shared[i][j][pk] = input[input_batch_stride * batch + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
+            input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
             weight_shared[pk][k] = weight[weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i]
             # input_shared[i][j][pk] = 1.29
-            input_shared[i][j][pk] = input[2]
+            # input_shared[i][j][pk] = input[2]
             # weight_shared[pk][k] = 2.56
 
 
