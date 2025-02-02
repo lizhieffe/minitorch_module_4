@@ -19,6 +19,7 @@ from .tensor_data import (
     to_index,
 )
 from .tensor_ops import MapProto, TensorOps
+from .tensor_functions import Function
 
 FakeCUDAKernel = Any
 
@@ -148,7 +149,7 @@ class Conv1dFun(Function):
             (out.shape[1] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
             (out.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
-        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)), 1)
+        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK), 1)
         _tensor_conv1d[blockspergrid, threadsperblock](
             *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
         )
@@ -179,7 +180,7 @@ class Conv1dFun(Function):
             (grad_weight.shape[1] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
             (grad_weight.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
-        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)), 1)
+        threadsperblock = (THREADS_PER_BLOCK, (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK), 1)
         _tensor_conv1d[blockspergrid, threadsperblock](
             *grad_weight.tuple(), grad_weight.size, *new_input.tuple(), *new_grad_output.tuple(), False
         )
