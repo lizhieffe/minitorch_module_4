@@ -33,166 +33,166 @@ index_to_position = njit(index_to_position)
 broadcast_index = njit(broadcast_index)
 
 
-def _tensor_conv1d(
-    out: Storage,
-    out_shape: Shape,
-    out_strides: Strides,
-    out_size: int,
-    input: Storage,
-    input_shape: Shape,
-    input_strides: Strides,
-    weight: Storage,
-    weight_shape: Shape,
-    weight_strides: Strides,
-    reverse: bool,
-) -> None:
-    """1D Convolution implementation.
+# def _tensor_conv1d(
+#     out: Storage,
+#     out_shape: Shape,
+#     out_strides: Strides,
+#     out_size: int,
+#     input: Storage,
+#     input_shape: Shape,
+#     input_strides: Strides,
+#     weight: Storage,
+#     weight_shape: Shape,
+#     weight_strides: Strides,
+#     reverse: bool,
+# ) -> None:
+#     """1D Convolution implementation.
 
-    Given input tensor of
+#     Given input tensor of
 
-       `batch, in_channels, width`
+#        `batch, in_channels, width`
 
-    and weight tensor
+#     and weight tensor
 
-       `out_channels, in_channels, k_width`
+#        `out_channels, in_channels, k_width`
 
-    Computes padded output of
+#     Computes padded output of
 
-       `batch, out_channels, width`
+#        `batch, out_channels, width`
 
-    `reverse` decides if weight is anchored left (False) or right.
-    (See diagrams)
+#     `reverse` decides if weight is anchored left (False) or right.
+#     (See diagrams)
 
-    Args:
-    ----
-        out (Storage): storage for `out` tensor.
-        out_shape (Shape): shape for `out` tensor.
-        out_strides (Strides): strides for `out` tensor.
-        out_size (int): size of the `out` tensor.
-        input (Storage): storage for `input` tensor.
-        input_shape (Shape): shape for `input` tensor.
-        input_strides (Strides): strides for `input` tensor.
-        weight (Storage): storage for `input` tensor.
-        weight_shape (Shape): shape for `input` tensor.
-        weight_strides (Strides): strides for `input` tensor.
-        reverse (bool): anchor weight at left or right. lizhi@: anchor means the convolution starts from the left or the right most.
+#     Args:
+#     ----
+#         out (Storage): storage for `out` tensor.
+#         out_shape (Shape): shape for `out` tensor.
+#         out_strides (Strides): strides for `out` tensor.
+#         out_size (int): size of the `out` tensor.
+#         input (Storage): storage for `input` tensor.
+#         input_shape (Shape): shape for `input` tensor.
+#         input_strides (Strides): strides for `input` tensor.
+#         weight (Storage): storage for `input` tensor.
+#         weight_shape (Shape): shape for `input` tensor.
+#         weight_strides (Strides): strides for `input` tensor.
+#         reverse (bool): anchor weight at left or right. lizhi@: anchor means the convolution starts from the left or the right most.
 
-    """
-    batch_, out_channels, out_width = out_shape
-    batch, in_channels, width = input_shape
-    out_channels_, in_channels_, kw = weight_shape
+#     """
+#     batch_, out_channels, out_width = out_shape
+#     batch, in_channels, width = input_shape
+#     out_channels_, in_channels_, kw = weight_shape
 
-    assert (
-        batch == batch_
-        and in_channels == in_channels_
-        and out_channels == out_channels_
-    )
-    s1 = input_strides
-    s2 = weight_strides
+#     assert (
+#         batch == batch_
+#         and in_channels == in_channels_
+#         and out_channels == out_channels_
+#     )
+#     s1 = input_strides
+#     s2 = weight_strides
 
-    # lizhi: Logical Steps
-    # 1. Unroll the input from (B, C, T) to (B, T, C * K)
-    # 2. Reshape the weight from (C_OUT, C, K) to (C * K, C_OUT)
-    # 3. Multiply gives (B, T, C_OUT)
-    # 4. Convert to (B, C_OUT, T)
+#     # lizhi: Logical Steps
+#     # 1. Unroll the input from (B, C, T) to (B, T, C * K)
+#     # 2. Reshape the weight from (C_OUT, C, K) to (C * K, C_OUT)
+#     # 3. Multiply gives (B, T, C_OUT)
+#     # 4. Convert to (B, C_OUT, T)
 
-    for i in prange(out_size):
-        out_idx = np.empty_like(out_shape, dtype=np.int32)
-        to_index(i, out_shape, out_idx)
+#     for i in prange(out_size):
+#         out_idx = np.empty_like(out_shape, dtype=np.int32)
+#         to_index(i, out_shape, out_idx)
 
-        bi, coi, ti = out_idx
+#         bi, coi, ti = out_idx
 
-        total = 0.0
-        for ci in prange(in_channels):
-            for ki in range(kw):
-                if reverse:
-                    ki = kw - ki - 1
+#         total = 0.0
+#         for ci in prange(in_channels):
+#             for ki in range(kw):
+#                 if reverse:
+#                     ki = kw - ki - 1
 
-                # Note: create np.array is very costly. If we use the commented out version, the training job is bout 6x slower.
+#                 # Note: create np.array is very costly. If we use the commented out version, the training job is bout 6x slower.
 
-                # weight_idx = np.array((coi, ci, ki))
-                # weight_pos = index_to_position(weight_idx, weight_strides)
-                # weight_val = weight[weight_pos]
+#                 # weight_idx = np.array((coi, ci, ki))
+#                 # weight_pos = index_to_position(weight_idx, weight_strides)
+#                 # weight_val = weight[weight_pos]
 
-                weight_val = weight[coi * s2[0] + ci * s2[1] + ki * s2[2]]
+#                 weight_val = weight[coi * s2[0] + ci * s2[1] + ki * s2[2]]
 
-                if reverse:
-                    if ti - ki < 0:
-                        input_val = 0.0
-                    else:
-                        input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti-ki) * input_strides[2]]
-                else:
-                    if ti + ki >= width:
-                        input_val = 0.0
-                    else:
-                        input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti+ki) * input_strides[2]]
+#                 if reverse:
+#                     if ti - ki < 0:
+#                         input_val = 0.0
+#                     else:
+#                         input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti-ki) * input_strides[2]]
+#                 else:
+#                     if ti + ki >= width:
+#                         input_val = 0.0
+#                     else:
+#                         input_val = input[bi * input_strides[0] + ci * input_strides[1] + (ti+ki) * input_strides[2]]
 
-                total += input_val * weight_val
+#                 total += input_val * weight_val
 
-        out_pos = index_to_position(out_idx, out_strides)
-        out[out_pos] = total
+#         out_pos = index_to_position(out_idx, out_strides)
+#         out[out_pos] = total
 
-tensor_conv1d = njit(_tensor_conv1d, parallel=True)
-
-
-class Conv1dFun(Function):
-    @staticmethod
-    def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
-        """Compute a 1D Convolution
-
-        Args:
-        ----
-            ctx : Context
-            input : batch x in_channel x h x w
-            weight : out_channel x in_channel x kh x kw
-
-        Returns:
-        -------
-            batch x out_channel x h x w
-
-        """
-        ctx.save_for_backward(input, weight)
-        batch, in_channels, w = input.shape
-        out_channels, in_channels2, kw = weight.shape
-        assert in_channels == in_channels2
-
-        # Run convolution
-        output = input.zeros((batch, out_channels, w))
-        tensor_conv1d(
-            *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
-        )
-        return output
-
-    @staticmethod
-    def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        input, weight = ctx.saved_values
-        batch, in_channels, w = input.shape
-        out_channels, in_channels, kw = weight.shape
-        grad_weight = grad_output.zeros((in_channels, out_channels, kw))
-        new_input = input.permute(1, 0, 2)
-        new_grad_output = grad_output.permute(1, 0, 2)
-        tensor_conv1d(  # type: ignore
-            *grad_weight.tuple(),
-            grad_weight.size,
-            *new_input.tuple(),
-            *new_grad_output.tuple(),
-            False,  # type: ignore
-        )
-        grad_weight = grad_weight.permute(1, 0, 2)
-
-        grad_input = input.zeros((batch, in_channels, w))
-        new_weight = weight.permute(1, 0, 2)
-        tensor_conv1d(  # type: ignore
-            *grad_input.tuple(),
-            grad_input.size,  # type: ignore
-            *grad_output.tuple(),
-            *new_weight.tuple(),
-            True,  # type: ignore
-        )
-        return grad_input, grad_weight
+# tensor_conv1d = njit(_tensor_conv1d, parallel=True)
 
 
-conv1d = Conv1dFun.apply
+# class Conv1dFun(Function):
+#     @staticmethod
+#     def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
+#         """Compute a 1D Convolution
+
+#         Args:
+#         ----
+#             ctx : Context
+#             input : batch x in_channel x h x w
+#             weight : out_channel x in_channel x kh x kw
+
+#         Returns:
+#         -------
+#             batch x out_channel x h x w
+
+#         """
+#         ctx.save_for_backward(input, weight)
+#         batch, in_channels, w = input.shape
+#         out_channels, in_channels2, kw = weight.shape
+#         assert in_channels == in_channels2
+
+#         # Run convolution
+#         output = input.zeros((batch, out_channels, w))
+#         tensor_conv1d(
+#             *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
+#         )
+#         return output
+
+#     @staticmethod
+#     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
+#         input, weight = ctx.saved_values
+#         batch, in_channels, w = input.shape
+#         out_channels, in_channels, kw = weight.shape
+#         grad_weight = grad_output.zeros((in_channels, out_channels, kw))
+#         new_input = input.permute(1, 0, 2)
+#         new_grad_output = grad_output.permute(1, 0, 2)
+#         tensor_conv1d(  # type: ignore
+#             *grad_weight.tuple(),
+#             grad_weight.size,
+#             *new_input.tuple(),
+#             *new_grad_output.tuple(),
+#             False,  # type: ignore
+#         )
+#         grad_weight = grad_weight.permute(1, 0, 2)
+
+#         grad_input = input.zeros((batch, in_channels, w))
+#         new_weight = weight.permute(1, 0, 2)
+#         tensor_conv1d(  # type: ignore
+#             *grad_input.tuple(),
+#             grad_input.size,  # type: ignore
+#             *grad_output.tuple(),
+#             *new_weight.tuple(),
+#             True,  # type: ignore
+#         )
+#         return grad_input, grad_weight
+
+
+# conv1d = Conv1dFun.apply
 
 
 def _tensor_conv2d(
