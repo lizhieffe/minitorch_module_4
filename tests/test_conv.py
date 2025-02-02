@@ -9,6 +9,10 @@ from .tensor_strategies import tensors
 
 @pytest.mark.task4_1
 def test_conv1d_simple() -> None:
+    # input: `batch, in_channels, width`
+    # weight: `out_channels, in_channels, k_width`
+    # output: `batch, out_channels, width`
+    
     t = minitorch.tensor([0, 1, 2, 3]).view(1, 1, 4)
     t.requires_grad_(True)
     t2 = minitorch.tensor([[1, 2, 3]]).view(1, 1, 3)

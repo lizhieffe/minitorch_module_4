@@ -43,7 +43,8 @@ to_index = device_jit(to_index)
 index_to_position = device_jit(index_to_position)
 broadcast_index = device_jit(broadcast_index)
 
-THREADS_PER_BLOCK = 32
+# Cuda has limit of max 1024 threads per block. Here we set this to 8 because we are building 3D block.
+THREADS_PER_BLOCK = 8
 
 def _tensor_conv1d(
     out: Storage,
@@ -95,7 +96,7 @@ def _tensor_conv1d(
         return
 
     # Allocate shared memory.
-    BLOCK_DIM = 32
+    BLOCK_DIM = 8
     input_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM, BLOCK_DIM), numba.float64) # [B, T, KW * C_IN]
     weight_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64) # [KW * C_IN, C_OUT]
 
@@ -152,11 +153,13 @@ class Conv1dFun(Function):
             (output.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
         threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)
+        # threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK)
+        # threadsperblock = (4, 4, 4)
+        # threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK * THREADS_PER_BLOCK)
+        # threadsperblock = (32, 32, 1)
         tensor_conv1d[blockspergrid, threadsperblock](
             *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
         )
-
-
 
         return output
 
@@ -168,14 +171,6 @@ class Conv1dFun(Function):
         grad_weight = grad_output.zeros((in_channels, out_channels, kw))
         new_input = input.permute(1, 0, 2)
         new_grad_output = grad_output.permute(1, 0, 2)
-        # tensor_conv1d(  # type: ignore
-        #     *grad_weight.tuple(),
-        #     grad_weight.size,
-        #     *new_input.tuple(),
-        #     *new_grad_output.tuple(),
-        #     False,  # type: ignore
-        # )
-
 
         blockspergrid = (
             (grad_weight.shape[0] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
@@ -183,9 +178,10 @@ class Conv1dFun(Function):
             (grad_weight.shape[2] + (THREADS_PER_BLOCK - 1)) // THREADS_PER_BLOCK,
         )
         threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK)
-        tensor_conv1d[blockspergrid, threadsperblock](
-            *grad_weight.tuple(), grad_weight.size, *new_input.tuple(), *new_grad_output.tuple(), False
-        )
+        # threadsperblock = (THREADS_PER_BLOCK, THREADS_PER_BLOCK)
+        # tensor_conv1d[blockspergrid, threadsperblock](
+        #     *grad_weight.tuple(), grad_weight.size, *new_input.tuple(), *new_grad_output.tuple(), False
+        # )
 
 
 
@@ -193,13 +189,16 @@ class Conv1dFun(Function):
 
         grad_input = input.zeros((batch, in_channels, w))
         new_weight = weight.permute(1, 0, 2)
-        tensor_conv1d(  # type: ignore
-            *grad_input.tuple(),
-            grad_input.size,  # type: ignore
-            *grad_output.tuple(),
-            *new_weight.tuple(),
-            True,  # type: ignore
+        tensor_conv1d[blockspergrid, threadsperblock](
+            *grad_input.tuple(), grad_input.size, *grad_output.tuple(), *new_weight.tuple(), True
         )
+        # tensor_conv1d(  # type: ignore
+        #     *grad_input.tuple(),
+        #     grad_input.size,  # type: ignore
+        #     *grad_output.tuple(),
+        #     *new_weight.tuple(),
+        #     True,  # type: ignore
+        # )
         return grad_input, grad_weight
 
         
