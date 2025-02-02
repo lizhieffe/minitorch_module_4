@@ -42,3 +42,36 @@ index_to_position = device_jit(index_to_position)
 broadcast_index = device_jit(broadcast_index)
 
 THREADS_PER_BLOCK = 32
+
+def _tensor_conv1d(
+    out: Storage,
+    out_shape: Shape,
+    out_strides: Strides,
+    out_size: int,
+    input: Storage,
+    input_shape: Shape,
+    input_strides: Strides,
+    weight: Storage,
+    weight_shape: Shape,
+    weight_strides: Strides,
+    reverse: bool,
+) -> None:
+    """
+
+    The grid x, y, z axis corresponds to the [B, T, COUT] dim of the output.
+
+
+    """
+    # get the index in the grid
+    i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+    j = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
+    k = cuda.blockIdx.z * cuda.blockDim.z + cuda.threadIdx.z
+
+    # Allocate shared memory.
+    BLOCK_DIM = 32
+    input_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM, BLOCK_DIM), numba.float64)
+    weight_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM, BLOCK_DIM), numba.float64)
+
+    
+
+
