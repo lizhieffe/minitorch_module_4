@@ -73,6 +73,13 @@ def _tensor_conv1d(
     # weight: `out_channels, in_channels, k_width`
     # output: `batch, out_channels, width`
     #
+
+    # out[0] = 1.23
+    # out[1] = 2.34
+    # out[2] = 2.34
+    # out[3] = 2.34
+    # out[6] = 2.34
+    
     batch, in_channels, width = input_shape
     out_channels, _, k_width = weight_shape
     assert batch == out_shape[0]
@@ -92,22 +99,40 @@ def _tensor_conv1d(
     pj = cuda.threadIdx.y
     pk = cuda.threadIdx.z
 
+    # out[0] = 1.23
+    # out[1] = 2.34
+    # out[2] = 2.34
+    # out[3] = 2.34
+    # out[6] = 2.34
+
     if i >= batch or j >= width:
         return
+
+    # out[0] = 1.23
+    # out[1] = 2.34
+    # out[2] = 2.34
+    # out[3] = 2.34
+    # out[6] = 2.34
 
     # Allocate shared memory.
     BLOCK_DIM = 8
     input_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM, BLOCK_DIM), numba.float64) # [B, T, KW * C_IN]
     weight_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64) # [KW * C_IN, C_OUT]
 
-    total = 0
+    total = 0.0
+    # total = 1.25
     for conv_i in range(0, k_width * in_channels, BLOCK_DIM):
+        # assert conv_i == 1
         k_width_i = (pk + conv_i) // in_channels
         in_channels_i = (pk + conv_i) % in_channels
 
         if pk + conv_i < k_width * in_channels:
-            input_shared[i][j][pk] = input[input_batch_stride * batch + input_strides[1] * in_channels_i + input_strides[2] * (width + k_width_i)]
+            input_shared[i][j][pk] = input[input_batch_stride * batch + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
             weight_shared[pk][k] = weight[weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i]
+            # input_shared[i][j][pk] = 1.29
+            input_shared[i][j][pk] = input[2]
+            # weight_shared[pk][k] = 2.56
+
 
         numba.cuda.syncthreads()
 
@@ -117,6 +142,12 @@ def _tensor_conv1d(
             total += input_shared[i][j][iii] * weight_shared[iii][k]
 
     out[out_strides[0] * i + out_strides[1] * j + out_strides[2] * k] = total
+    
+    # out[0] = 1.23
+    # out[1] = 2.34
+    # out[2] = 2.34
+    # out[3] = 2.34
+    # out[6] = 2.34
 
 tensor_conv1d = jit(_tensor_conv1d)
 
