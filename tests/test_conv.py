@@ -28,12 +28,23 @@ def test_conv1d_simple() -> None:
     assert out[0, 0, 2] == 2 * 1 + 3 * 2
     assert out[0, 0, 3] == 3 * 1
 
+    assert_close_tensor(out, minitorch.Conv1dFun.apply(t, t2))
+
 @pytest.mark.task4_1
 @given(tensors(shape=(2, 2, 6)), tensors(shape=(3, 2, 2)))
 @settings(max_examples=50)
 def test_conv1d_simple_2(input: Tensor, weight: Tensor) -> None:
     out = minitorch.Conv1dCudaFun.apply(input, weight)
     assert_close(out[0,0,0], input[0, 0, 0] * weight[0, 0, 0] + input[0, 0, 1] * weight[0, 0, 1] + input[0, 1, 0] * weight[0, 1, 0] + input[0, 1, 1] * weight[0, 1, 1])
+    assert_close_tensor(out, minitorch.Conv1dFun.apply(input, weight))
+
+@pytest.mark.task4_1
+@given(tensors(shape=(6, 6, 6)), tensors(shape=(4, 6, 4)))
+@settings(max_examples=50)
+def test_conv1d_simple_3(input: Tensor, weight: Tensor) -> None:
+    out = minitorch.Conv1dCudaFun.apply(input, weight)
+    # assert_close(out[0,0,0], input[0, 0, 0] * weight[0, 0, 0] + input[0, 0, 1] * weight[0, 0, 1] + input[0, 1, 0] * weight[0, 1, 0] + input[0, 1, 1] * weight[0, 1, 1])
+    assert_close_tensor(out, minitorch.Conv1dFun.apply(input, weight))
 
 @pytest.mark.task4_1
 @given(tensors(shape=(1, 1, 6)), tensors(shape=(1, 1, 4)))
