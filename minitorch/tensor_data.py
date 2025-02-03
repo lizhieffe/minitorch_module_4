@@ -193,7 +193,7 @@ class TensorData:
 
         if strides is None:
             strides = strides_from_shape(shape)
-            print(f"===lizhi tensor_data input strides is None {shape=} {strides=}")
+            # print(f"===lizhi tensor_data input strides is None {shape=} {strides=}")
 
         assert isinstance(strides, tuple), "Strides must be tuple"
         assert isinstance(shape, tuple), "Shape must be tuple"

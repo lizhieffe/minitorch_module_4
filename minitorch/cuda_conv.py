@@ -21,6 +21,7 @@ from .tensor_data import (
 )
 from .tensor_ops import MapProto, TensorOps
 from .tensor_functions import Function
+import time
 
 FakeCUDAKernel = Any
 
@@ -99,22 +100,8 @@ def _tensor_conv1d(
     pj = cuda.threadIdx.y
     pk = cuda.threadIdx.z
 
-    # out[0] = 1.23
-    # out[1] = 2.34
-    # out[2] = 2.34
-    # out[3] = 2.34
-    # out[6] = 2.34
-
-    if i >= batch or j >= width or k >= out_channels:
+    if j >= width:
         return
-    # if i >= batch or j >= out_channels or k >= width:
-    #     return
-
-    # out[0] = 1.23
-    # out[1] = 2.34
-    # out[2] = 2.34
-    # out[3] = 2.34
-    # out[6] = 2.34
 
     # Allocate shared memory.
     BLOCK_DIM = 8
@@ -123,30 +110,50 @@ def _tensor_conv1d(
 
     total = 0.0
     # total = 1.25
+    # print(f"===lizhi cuda_conv {k_width=} {in_channels=}")
     for conv_i in range(0, k_width * in_channels, BLOCK_DIM):
+        
         # assert conv_i == 1
-        k_width_i = (pk + conv_i) // in_channels
-        in_channels_i = (pk + conv_i) % in_channels
+        
 
         if pk + conv_i < k_width * in_channels:
-            input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
-            weight_pos = weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i
-            # print(f"===lizhi {k=} {in_channels_i=} {weight_strides.shape=} {weight_strides[0]=} {weight_strides[1]=} {weight_strides[2]=} {weight_pos=}")
-            weight_shared[pk][k] = weight[weight_pos]
-            input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * 0 + input_strides[2] * (j + k_width_i)]
+            k_width_i = (pk + conv_i) // in_channels
+            in_channels_i = (pk + conv_i) % in_channels
+            # Make sure the conv doesn't go out bound of T
+            if j + k_width_i < width:
+                # print(f"===lizhi cuda_conv {i=} {j=} {k=} {conv_i=} {pk=}")
+                input_shared[i][j][pk] = input[input_batch_stride * i + input_strides[1] * in_channels_i + input_strides[2] * (j + k_width_i)]
+                # weight_pos = weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i
+                # print(f"===lizhi {k=} {in_channels_i=} {weight_strides.shape=} {weight_strides[0]=} {weight_strides[1]=} {weight_strides[2]=} {weight_pos=}")
+                # weight_shared[pk][k] = weight[weight_pos]
+            else:
+                input_shared[i][j][pk] = 0
+
             # input_shared[i][j][pk] = 1.2
+        if pi + conv_i < k_width * in_channels and pj == 0:
+            k_width_i = (pi + conv_i) // in_channels
+            in_channels_i = (pi + conv_i) % in_channels
 
+            # print(f"===lizhi setting weight shared: {pi=}, {conv_i=} {pi + conv_i < k_width * in_channels}")
+            if k < out_channels:    
+                weight_pos = weight_strides[0] * k + weight_strides[1] * in_channels_i + weight_strides[2] * k_width_i
+                print(f"===lizhi {k=} {in_channels_i=} {k_width_i=} {weight_pos=}")
+                weight_shared[pi][k] = weight[weight_pos]
 
-        # numba.cuda.syncthreads()
+        # numba.cuda.syncthreads()    
+        time.sleep(1)
+        
+        if i < batch and k < out_channels:
+            for iii in range(BLOCK_DIM):
+                if iii + conv_i >= k_width * in_channels:
+                    break
+                print(f"===lizhi cuda_conv {i=} {j=} {k=} {iii=} {input_shared[i][j][iii]=} {weight_shared[iii][k]=}")
+                total += input_shared[i][j][iii] * weight_shared[iii][k]
 
-        for iii in range(BLOCK_DIM):
-            if iii + conv_i >= k_width * in_channels:
-                break
-            total += input_shared[i][j][iii] * weight_shared[iii][k]
-
-    out_pos = out_strides[0] * i + out_strides[1] * k + out_strides[2] * j
-    print(f"===lizhi {out_shape[1]=} {out_shape[2]=} {i=} {j=} {k=} {out_strides[0]=} {out_strides[1]=} {out_strides[2]=} {out_pos=}")
-    out[out_pos] = total
+    if i < batch and k < out_channels:
+        out_pos = out_strides[0] * i + out_strides[1] * k + out_strides[2] * j
+        # print(f"===lizhi {out_shape[1]=} {out_shape[2]=} {i=} {j=} {k=} {out_strides[0]=} {out_strides[1]=} {out_strides[2]=} {out_pos=}")
+        out[out_pos] = total
     
     # out[0] = 1.23
     # out[1] = 2.34
