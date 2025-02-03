@@ -151,7 +151,7 @@ def _tensor_conv1d(
 
 tensor_conv1d = jit(_tensor_conv1d)
 
-class Conv1dFun(Function):
+class Conv1dCudaFun(Function):
     @staticmethod
     def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
         """Compute a 1D Convolution

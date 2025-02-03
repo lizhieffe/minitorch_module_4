@@ -20,7 +20,7 @@ def test_conv1d_simple() -> None:
     print(f"===lizhi {t=} {t2=}")
     _, t2_shape, t2_strides = t2.tuple()
     print(f"===lizhi {t2_shape=} {t2_strides=}")
-    out = minitorch.Conv1dFun.apply(t, t2)
+    out = minitorch.Conv1dCudaFun.apply(t, t2)
 
     print(f"===lizhi {out[0,0,0]=}")
     assert out[0, 0, 0] == 0 * 1 + 1 * 2 + 2 * 3
@@ -32,7 +32,7 @@ def test_conv1d_simple() -> None:
 @given(tensors(shape=(2, 2, 6)), tensors(shape=(3, 2, 2)))
 @settings(max_examples=50)
 def test_conv1d_simple_2(input: Tensor, weight: Tensor) -> None:
-    out = minitorch.Conv1dFun.apply(input, weight)
+    out = minitorch.Conv1dCudaFun.apply(input, weight)
     assert_close(out[0,0,0], input[0, 0, 0] * weight[0, 0, 0] + input[0, 0, 1] * weight[0, 0, 1] + input[0, 1, 0] * weight[0, 1, 0] + input[0, 1, 1] * weight[0, 1, 1])
 
 @pytest.mark.task4_1
